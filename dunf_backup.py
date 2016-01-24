@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-__author__ = 'dunf'
+__author__ = 'Mihkal Dunfjeld'
 __version__ = "0.2.0"
 
 
@@ -14,7 +14,6 @@ import configparser
 
 # ---------------------- ARGPARSE ----------------------------------------------
 parser = ArgumentParser()
-
 mutually_exclusive = parser.add_mutually_exclusive_group()
 mutually_exclusive.add_argument("-f", "--full", help="Performs full backup with"
                                 "maximum compression", action="store_true")
@@ -34,16 +33,27 @@ NO_COMPRESSION = args.copy
 
 
 # ------------------------ CONFIG PARSER ---------------------------------------
-config = configparser.ConfigParser()
 
-def read_config():
-    try:
-        config.read('dunf_backup.cfg')
-    except configparser.ParsingError:
-        create_config()
+class Config(object):
+    config = configparser.ConfigParser()
 
-def create_config():
-    pass
+
+    def read_config(self):
+        try:
+            self.config.read('dunf_backup.conf')
+        except configparser.ParsingError:
+            print("Config file not found...")
+
+    def get_destination(self):
+        destination = self.config.get('Default', option='destination')
+        return destination
+
+
+
+
+
+    def create_config(self):
+        pass
 # ------------------------ GLOBAL VARIABLES ------------------------------------
 
 
@@ -52,7 +62,7 @@ def create_config():
 
 class Backup(object):
     # This is where files are stored
-    destination = "/media/md/CrucialMX100/backups/"
+   # destination = "/media/md/CrucialMX100/backups/"
 
      # Current date and time, format: year_month_day__hour_minute
     current_time = strftime("%Y_%m_%d__%H_%M")
@@ -69,11 +79,11 @@ class Backup(object):
     no_compress_filename = "ubuntu_backup_" + current_time + "_no_compression.7z"
 
     # Full compression 7-Zip parameters
-    full_compress_args = " a -t7z -mx9 -mmt=on " + destination + \
+    full_compress_args = " a -t7z -mx9 -mmt=on " + Conf.get_destination() + \
                          full_compress_filename + " -ir@" + include_list + " -xr@" + exclude_list
 
     # No compression 7-Zip parameters
-    no_compress_args = " a -t7z -mx0 " + destination + \
+    no_compress_args = " a -t7z -mx0 " + Conf.get_destination() + \
                        no_compress_filename + " -ir@" + include_list + " -xr@" + exclude_list
 
 
@@ -86,15 +96,15 @@ class Backup(object):
 
 
 
-    def check_destination(self):
-        if path.isdir(self.destination):
+    def check_destination(self, dest):
+        if path.isdir(dest):
             return True
         else:
             print("Destination not found...")
             return False
 
     # Does a full backup using maximum compression
-    def full_compression(self):
+    def full_compression(self, dest):
         start_time = default_timer()
         call("7za" + self.full_compress_args, shell=True)
         elapsed = default_timer() - start_time
@@ -112,13 +122,16 @@ class Backup(object):
 
 if __name__ == "__main__":
     backup = Backup()
+    Conf = Config()
+    dest = Conf.get_destination()
+    backup.check_destination(dest)
     backup.check_dependency()
-    backup.check_destination()
+
     if len(argv) < 2:
         print("dunf BACKUP SCRIPT ", __version__)
         print("For help, use the '-h' or '--help' parameter")
     elif FULL_COMPRESSION:
-        backup.full_compression()
+        backup.full_compression(dest)
     elif NO_COMPRESSION:
         backup.no_compression()
     else:
