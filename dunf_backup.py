@@ -7,9 +7,10 @@ from subprocess import call, check_output
 from time import strftime
 from timeit import default_timer
 import configparser
+import sys, os
 
 __author__ = 'Mihkal Dunfjeld'
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 
 
@@ -31,6 +32,8 @@ NO_COMPRESSION = args.copy
 DESTINATION = args.destination
 
 # ------------------------ CONFIG PARSER ---------------------------------------
+
+
 class Config(object):
     config = configparser.ConfigParser()
 
@@ -43,22 +46,28 @@ class Config(object):
     def get_destination(self):
         if DESTINATION:
             counter = 0
-            for var in argv:
-                if var == '-d' or var == '--destination':
-                    return str(argv[counter+1])
+            for param in argv:
+                if param == '-d' or param == '--destination':
+                    destination = str(argv[counter+1])
+                    return destination
                 counter += 1
         else:
             destination = self.config.get('Default', option='destination')
             return str(destination)
 
+    def get_include_list(self):
+        include_list = self.config.get('Default', option='include_list')
+        return include_list
+
+    def get_exclude_list(self):
+        exclude_list = self.config.get('Default', option='exclude_list')
+        return exclude_list
+
     def create_config(self):
         pass
-# ------------------------ GLOBAL VARIABLES ------------------------------------
 
+# ------------------------ GLOBAL VARIABLES  AND FUNCTIONS ------------------------------------
 
-def check_destination(dest):
-    if not path.isdir(dest):
-        print("Destination not found...")
 
 # Checks if 7-zip is installed, if not asks the user to install it. Works with apt-get
 def check_dependency():
@@ -67,35 +76,33 @@ def check_dependency():
         call("sudo apt-get install p7zip-full", shell=True)
 
 
+def get_filename():
+    current_time = strftime("%Y_%m_%d__%H_%M")      # yyyy_mm_dd__hh_mm
+    if FULL_COMPRESSION:
+        return "ubuntu_backup_" + current_time + "_full_compression.7z"
+    elif NO_COMPRESSION:
+        return "ubuntu_backup_" + current_time + "_no_compression.7z"
+    else:
+        pass
+
 # ------------------------------------------------------------------------------
 
+
 class Backup(object):
-    # This is where files are stored
-    # destination = "/media/md/CrucialMX100/backups/"
+    config = Config()
+    config.read_config()
 
-    # Path to the file that contains paths to included in backup script
-    i_list = "/home/md/scripts/dunf_backup/dunf_include.conf"
-    e_list = "/home/md/scripts/dunf_backup/dunf_exclude.conf"
+    def include_list(self):
+        return self.config.get_include_list()
 
-    def get_filename(self):
-        current_time = strftime("%Y_%m_%d__%H_%M") # yyyy_mm_dd__hh_mm
-        if FULL_COMPRESSION:
-            return "ubuntu_backup_" + current_time + "_full_compression.7z"
-        elif NO_COMPRESSION:
-            return "ubuntu_backup_" + current_time + "_no_compression.7z"
-        else:
-            pass
-
-
-
-
-
+    def exclude_list(self):
+        return self.config.get_exclude_list()
 
     # Does a full backup using maximum compression
     def full_compression(self, dest, file_name):
         start_time = default_timer()
-        call("7za a -t7z -mx9 -mmt=on " + dest + file_name + " -ir@" + self.i_list +
-             " -xr@" + self.e_list, shell=True)
+        call("7za a -t7z -mx9 -mmt=on " + dest + file_name + " -ir@" + self.include_list() +
+             " -xr@" + self.exclude_list(), shell=True)
         elapsed = default_timer() - start_time
         print("Saved to " + dest)
         print("Backup completed in ", elapsed.__round__(3), " seconds")
@@ -103,20 +110,16 @@ class Backup(object):
     # Does a full backup with no compression.
     def no_compression(self, dest, file_name):
         start_time = default_timer()
-        call("7za a -t7z -mx0 " + dest + file_name + " -ir@" + self.i_list + \
-             " -xr@" + self.e_list,  shell=True)
+        call("7za a -t7z -mx0 " + dest + file_name + " -ir@" + self.include_list() + \
+             " -xr@" + self.exclude_list(),  shell=True)
         elapsed = default_timer() - start_time
         print("Saved to " + dest)
         print("Backup completed in ", elapsed.__round__(3), " seconds")
 
 if __name__ == "__main__":
     backup = Backup()
-    conf = Config()
-    conf.read_config()
-    check_dependency()
-    dest = conf.get_destination()
-    # backup.check_destination(dest)
-    file_name = backup.get_filename()
+    dest = backup.config.get_destination()
+    file_name = get_filename()
     if len(argv) < 2:
         print("dunf BACKUP SCRIPT ", __version__)
         print("For help, use the '-h' or '--help' parameter")
