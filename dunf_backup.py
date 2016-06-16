@@ -10,7 +10,7 @@ import configparser
 import sys, os
 
 __author__ = 'Mihkal Dunfjeld'
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 
 
@@ -39,7 +39,7 @@ class Config(object):
 
     def read_config(self):
         try:
-            return self.config.read('config.ini')
+            return self.config.read('./config.ini')
         except configparser.ParsingError:
             print("Config file not found...")
 
@@ -57,14 +57,14 @@ class Config(object):
 
     def get_include_list(self):
         include_list = self.config.get('Default', option='include_list')
+        print(include_list)
         return include_list
 
     def get_exclude_list(self):
         exclude_list = self.config.get('Default', option='exclude_list')
         return exclude_list
 
-    def create_config(self):
-        pass
+
 
 # ------------------------ GLOBAL VARIABLES  AND FUNCTIONS ------------------------------------
 
@@ -73,15 +73,16 @@ class Config(object):
 def check_dependency():
     if not path.exists("/usr/bin/7za"):
         print("Missing dependency p7zip-full")
-        call("sudo apt-get install p7zip-full", shell=True)
+        call("sudo pacman -S p7zip", shell=True)
+
 
 
 def get_filename():
     current_time = strftime("%Y_%m_%d__%H_%M")      # yyyy_mm_dd__hh_mm
     if FULL_COMPRESSION:
-        return "ubuntu_backup_" + current_time + "_full_compression.7z"
+        return "arch_backup_" + current_time + "_full_compression.7z"
     elif NO_COMPRESSION:
-        return "ubuntu_backup_" + current_time + "_no_compression.7z"
+        return "arch_backup_" + current_time + "_no_compression.7z"
     else:
         pass
 
@@ -116,6 +117,12 @@ class Backup(object):
         print("Saved to " + dest)
         print("Backup completed in ", elapsed.__round__(3), " seconds")
 
+
+    def incremental_backup(self):
+        pass
+
+# ------------------------------------ MAIN -------------------------------------------------------
+
 if __name__ == "__main__":
     backup = Backup()
     dest = backup.config.get_destination()
@@ -125,7 +132,9 @@ if __name__ == "__main__":
         print("For help, use the '-h' or '--help' parameter")
     elif FULL_COMPRESSION:
         backup.full_compression(dest, file_name)
+        pass
     elif NO_COMPRESSION:
         backup.no_compression(dest, file_name)
+        pass
     else:
         pass
