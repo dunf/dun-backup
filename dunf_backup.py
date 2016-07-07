@@ -12,9 +12,8 @@ __author__ = 'Mihkal Dunfjeld'
 __version__ = "1.1.0"
 
 
-def Args():
+def argss():
     parser = ArgumentParser()
-    mu = parser.add_mutually_exclusive_group()
     parser.add_argument("-t", "--type", choices=['i', 'f'], default='f',
                         help='Specifies backup type.'
                              ' (i)ncremental or (f)ull backup.')
@@ -29,36 +28,41 @@ def Args():
 
 
 class Config(object):
-    args = Args()
+    args = argss()
 
     def __init__(self, config=configparser.ConfigParser()):
         """Initializes config object and reads config file."""
         self._config = config
-        print(self.args)
         self.read_config()
 
     def read_config(self):
         """Reads the config file."""
         if self.args.config is None:
-            try:
+            p = path.join(environ['HOME'], '.dunf_backup.ini')
+            if path.exists(p):
                 return self._config.read(path.join(environ['HOME'],
                                                    '.dunf_backup.ini'))
-            except configparser.ParsingError:
-                print("Config file not found. Creating config file "
-                      "{}/.dunf_backup.ini.".format(environ['HOME']))
-                self.create_config()
+            else:
+                self.create_config(p)
                 sys.exit(0)
-        else:  # If config is user specified
+        else:
             if path.exists(self.args.config[0]):
                 return self._config.read(self.args.config[0])
             else:
                 print("Config file does not exist...")
                 sys.exit(1)
 
-    def create_config(self):
+    def create_config(self, cfg_path):
         """Creates INI file with appropriate sections and default values
         if INI file does not exist."""
-        raise NotImplementedError
+        p = '{}/Downloads/'.format(environ['HOME'])
+        self._config.add_section('Default')
+        self._config.set('Default', 'destination', p)
+        self._config.add_section('Include')
+        self._config.add_section('Exclude')
+        with open(cfg_path, 'w') as file:
+            self._config.write(file)
+        print("Config file not found. Creating config file {}".format(cfg_path))
 
     def get_destination(self):
         """Returns user specified destination directory if -d flag is set. If
@@ -76,8 +80,9 @@ class Config(object):
 
     def exclude_list(self):
         """Fetches all exclude paths from dunf_backup.ini and returns them
-        as a single string."""
-        paths = []
+        as a single string. An empty string in index 0 is added to get --exclude
+        at the front of the first path in index 1."""
+        paths = ['']
         for key, value in self._config.items('Exclude'):
             paths.append(value)
         return ' --exclude='.join(paths)
@@ -93,6 +98,8 @@ class Backup(object):
         self._exclude_list = self._config.exclude_list()
 
     def get_args(self):
+        """Returns the status of all arguments whether they are passed to the
+        script or not."""
         return self._config.args
 
     def get_destination(self):
@@ -112,7 +119,7 @@ class Backup(object):
         """Runs the backup script..."""
         tar_option = ' -czvf' if compression else ' -cvf'
         start_time = default_timer()
-        call("tar --exclude={a} {b} {c}{d} {e}".format(
+        call("tar{a} {b} {c}{d} {e}".format(
              a=self._exclude_list,
              b=tar_option,
              c=destination,
@@ -126,13 +133,13 @@ class Backup(object):
 def main():
     """Main entry point"""
     backup = Backup()
-    dst = backup.get_destination()
-    a = backup.get_args()
-    compression = a.compression
-    if a.type == 'f':
-        backup.run_backup(dst, compression)
+    destination = backup.get_destination()
+    argument = backup.get_args()
+    compression = argument.compression
+    if argument.type == 'f':
+        backup.run_backup(destination, compression)
         pass
-    elif a.type == 'i':
+    elif argument.type == 'i':
         raise NotImplementedError
 
 
