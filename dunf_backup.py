@@ -36,21 +36,20 @@ class Config(object):
         self.read_config()
 
     def read_config(self):
-        """Reads the config file."""
+        """Attempts to read the config file and creates a new one if it does not
+        exist. If -C option is passed, that file is read instead."""
         if self.args.config is None:
             p = path.join(environ['HOME'], '.dunf_backup.ini')
             if path.exists(p):
-                return self._config.read(path.join(environ['HOME'],
-                                                   '.dunf_backup.ini'))
+                return self._config.read(p)
             else:
                 self.create_config(p)
                 sys.exit(0)
         else:
-            if path.exists(self.args.config[0]):
-                return self._config.read(self.args.config[0])
-            else:
-                print("Config file does not exist...")
-                sys.exit(1)
+            file = self.args.config[0]
+            if path.isfile(file):
+                return self._config.read(file)
+            sys.exit(1)
 
     def create_config(self, cfg_path):
         """Creates INI file with appropriate sections and default values
@@ -75,7 +74,8 @@ class Config(object):
         as a single space-separated string."""
         paths = []
         for key, value in self._config.items('Include'):
-            paths.append(value)
+            if path.exists(value):
+                paths.append(value)
         return ' '.join(paths)
 
     def exclude_list(self):
@@ -84,7 +84,8 @@ class Config(object):
         at the front of the first path in index 1."""
         paths = ['']
         for key, value in self._config.items('Exclude'):
-            paths.append(value)
+            if path.exists(value):
+                paths.append(value)
         return ' --exclude='.join(paths)
 
 
