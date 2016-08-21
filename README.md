@@ -1,3 +1,6 @@
 # README #
 
-Simple backup script written in python. 
+Simple cli-backup tool written in python.
+
+TOOD:
+- Add support for encryption
