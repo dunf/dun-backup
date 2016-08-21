@@ -2,5 +2,5 @@
 
 Simple cli-backup tool written in python.
 
-TOOD:
+TODO:
 - Add support for encryption
