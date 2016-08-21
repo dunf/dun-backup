@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from os import path, environ
+import os
 import sys
 from argparse import ArgumentParser
 from subprocess import call
@@ -39,29 +39,33 @@ class Config(object):
         """Attempts to read the config file and creates a new one if it does not
         exist. If -C option is passed, that file is read instead."""
         if self.args.config is None:
-            p = path.join(environ['HOME'], '.dunf_backup.ini')
-            if path.exists(p):
+            p = os.path.join(os.environ['HOME'], '.dunf_backup.ini')
+            if os.path.exists(p):
                 return self._config.read(p)
             else:
                 self.create_config(p)
                 sys.exit(0)
         else:
             file = self.args.config[0]
-            if path.isfile(file):
+            if os.path.isfile(file):
                 return self._config.read(file)
             sys.exit(1)
 
     def create_config(self, cfg_path):
         """Creates INI file with appropriate sections and default values
         if INI file does not exist."""
-        p = '{}/Downloads/'.format(environ['HOME'])
+        p = '{}/Documents/'.format(os.environ['HOME'])
         self._config.add_section('Default')
         self._config.set('Default', 'destination', p)
+        self._config.set('Default', 'number_of_backups', '5')
         self._config.add_section('Include')
         self._config.add_section('Exclude')
         with open(cfg_path, 'w') as file:
             self._config.write(file)
         print("Config file not found. Creating config file {}".format(cfg_path))
+
+    def get_config_entry(self, section, key):
+        return self._config.get(section, option=key)
 
     def get_destination(self):
         """Returns user specified destination directory if -d flag is set. If
@@ -74,7 +78,7 @@ class Config(object):
         as a single space-separated string."""
         paths = []
         for key, value in self._config.items('Include'):
-            if path.exists(value):
+            if os.path.exists(value):
                 paths.append(value)
         return ' '.join(paths)
 
@@ -84,7 +88,7 @@ class Config(object):
         at the front of the first path in index 1."""
         paths = ['']
         for key, value in self._config.items('Exclude'):
-            if path.exists(value):
+            if os.path.exists(value):
                 paths.append(value)
         return ' --exclude='.join(paths)
 
@@ -112,9 +116,9 @@ class Backup(object):
         """Creates filename that is derived from time and type of compression."""
         timestamp = strftime("%Y_%m_%d__%H_%M")  # yyyy_mm_dd__hh_MM
         if Config.args.compression:
-            return "arch_backup_{}_compressed.tar.gz".format(timestamp)
+            return "backup_{}_compressed.tar.gz".format(timestamp)
         else:
-            return "arch_backup_{}.tar.gz".format(timestamp)
+            return "backup_{}.tar.gz".format(timestamp)
 
     def run_backup(self, destination, compression):
         """Runs the backup script..."""
@@ -130,6 +134,15 @@ class Backup(object):
         print("Saved to {}...".format(destination))
         print("Backup completed in {} seconds...".format(elapsed.__round__(3)))
 
+    def rotate(self, destination):
+        """Deletes all but the x newest backups"""
+        x = self._config.get_config_entry('Default', 'number_of_backups')
+        old_files = [x for x in sorted(os.listdir(destination))[:-int(x)]]
+        for file in old_files:
+            os.remove(os.path.join(destination, file))
+
+
+
 
 def main():
     """Main entry point"""
@@ -139,7 +152,7 @@ def main():
     compression = argument.compression
     if argument.type == 'f':
         backup.run_backup(destination, compression)
-        pass
+        backup.rotate(destination)
     elif argument.type == 'i':
         raise NotImplementedError
 
