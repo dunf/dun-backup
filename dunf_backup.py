@@ -2,28 +2,32 @@
 
 import os
 import sys
+
+import configparser
 from argparse import ArgumentParser
 from subprocess import call
-import configparser
+
 from time import strftime
 from timeit import default_timer
 
 __author__ = 'Mihkal Dunfjeld'
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 
 def argss():
     parser = ArgumentParser()
     parser.add_argument("-t", "--type", choices=['i', 'f'], default='f',
-                        help='Specifies backup type.'
+                        help='Specifies backup type...'
                              ' (i)ncremental or (f)ull backup.')
     parser.add_argument("-c", "--compression",
                         help="Whether to compress the files"
-                        "or not.", action="store_true")
+                        "or not..", action="store_true")
     parser.add_argument("-d", "--destination", nargs=1,
-                        help="Manually specify destination")
+                        help="Manually specify destination...")
     parser.add_argument("-C", "--config", nargs=1, help="Specify path to config"
                                                         "file.")
+    parser.add_argument('-e', '--encrypt', action='store_true',
+                        help='Use GPG to encrypt output file...')
     return parser.parse_args()
 
 
@@ -120,9 +124,9 @@ class Backup(object):
         else:
             return "backup_{}.tar.gz".format(timestamp)
 
-    def run_backup(self, destination, compression):
+    def run_backup(self, destination, compress, encrypt):
         """Runs the backup script..."""
-        tar_option = ' -czvf' if compression else ' -cvf'
+        tar_option = ' -czvf' if compress else ' -cvf'
         start_time = default_timer()
         call("tar{a} {b} {c}{d} {e}".format(
              a=self._exclude_list,
@@ -134,14 +138,12 @@ class Backup(object):
         print("Saved to {}...".format(destination))
         print("Backup completed in {} seconds...".format(elapsed.__round__(3)))
 
-    def rotate(self, destination):
+    def rotate(self):
         """Deletes all but the x newest backups"""
         x = self._config.get_config_entry('Default', 'number_of_backups')
-        old_files = [x for x in sorted(os.listdir(destination))[:-int(x)]]
+        old_files = [i for i in sorted(os.listdir(self._destination))[:-int(x)]]
         for file in old_files:
-            os.remove(os.path.join(destination, file))
-
-
+            os.remove(os.path.join(self._destination, file))
 
 
 def main():
@@ -149,10 +151,11 @@ def main():
     backup = Backup()
     destination = backup.get_destination()
     argument = backup.get_args()
-    compression = argument.compression
+    compress = argument.compression
+    encrypt = argument.encrypt
     if argument.type == 'f':
-        backup.run_backup(destination, compression)
-        backup.rotate(destination)
+        backup.run_backup(destination, compress, encrypt)
+        backup.rotate()
     elif argument.type == 'i':
         raise NotImplementedError
 
