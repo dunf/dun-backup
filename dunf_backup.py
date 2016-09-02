@@ -152,7 +152,7 @@ def main():
     destination = backup.get_destination()
     argument = backup.get_args()
     compress = argument.compression
-    encrypt = argument.encrypt
+    encrypt = argument.encrypt              # Not implemented
     if argument.type == 'f':
         backup.run_backup(destination, compress, encrypt)
         backup.rotate()
