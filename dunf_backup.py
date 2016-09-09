@@ -40,7 +40,6 @@ def argss():
 
 class Config(object):
     args = argss()
-    gpg_recipient = None
 
     def __init__(self, config=configparser.ConfigParser()):
         """Initializes config object and reads config file."""
@@ -118,8 +117,9 @@ class Config(object):
     def exclude_list(self):
         """Fetches all exclude paths from dunf_backup.ini and returns them
         as a single string."""
-        paths = [''] # An empty string in index 0 is added to get --exclude
-                     # at the front of the first path in index 1
+        # An empty string in index 0 is added to get --exclude
+        # at the front of the first path in index 1
+        paths = ['']
         for key, value in self._config.items('Exclude'):
             if os.path.exists(value):
                 paths.append(value)
@@ -132,7 +132,6 @@ class Backup(object):
         lists."""
         self._config = config
         self._destination = self._config.get_destination()
-        #self._rotation = self._config.
 
     def get_args(self):
         """Returns the status of all arguments whether they are passed to the
