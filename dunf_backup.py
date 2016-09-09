@@ -12,7 +12,7 @@ from time import strftime
 from timeit import default_timer
 
 __author__ = 'Mihkal Dunfjeld'
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 
 def argss():
@@ -27,14 +27,20 @@ def argss():
                         help="Manually specify destination...")
     parser.add_argument("-C", "--config", nargs=1, help="Specify path to config"
                                                         "file.")
-    parser.add_argument('-e', '--encrypt', action='store_true',
-                        help='Use GPG to encrypt output file...')
+    parser.add_argument('-e', '--encrypt', nargs=1,
+                        help='Specify email address of GPG recipient...')
+    parser.add_argument('-r', '--no_rotate', action='store_true',
+                        help='Disable file rotation for current session if it\'s'
+                             ' enabled in config...')
+    parser.add_argument('-z', '--no_encrypt', action='store_true',
+                        help='Disable encryption for current session if it\'s'
+                             ' enabled in config...')
     return parser.parse_args()
 
 
 class Config(object):
     args = argss()
-    encrypt = None
+    gpg_recipient = None
 
     def __init__(self, config=configparser.ConfigParser()):
         """Initializes config object and reads config file."""
@@ -60,10 +66,14 @@ class Config(object):
     def create_config(self, cfg_path):
         """Creates INI file with appropriate sections and default values
         if INI file does not exist."""
-        p = '{}/Documents/'.format(os.environ['HOME'])
+        home = os.environ['HOME']
+        if not os.path.exists(home + '/dunf-backup'):
+            os.mkdir(os.environ['HOME'] + '/dunf-backup')
+        p = '{}/dunf-backup/'.format(home)
         self._config.add_section('Default')
         self._config.set('Default', 'destination', p)
         self._config.set('Default', 'number_of_backups', '10')
+        self._config.set('Default', 'autorotate', 'True')
         self._config.set('Default', 'gpg_encrypt', 'False')
         self._config.set('Default', 'gpg_recipient', 'email@dunfjeld.no')
         self._config.add_section('Include')
@@ -81,15 +91,20 @@ class Config(object):
         return self.args.destination[0] if self.args.destination else \
             str(self._config.get('Default', option='destination'))
 
-    def crypto_is_enabled(self):
-        """If encryption is enabled through parameter or config, True and the
-        recipient email address used for encrypting with GPG is returned."""
-        recipient = str(self._config.get('Default', 'gpg_recipient'))
-        if self.args.encrypt is True:
-            return True, recipient
-        if self._config.get('Default', 'gpg_encrypt') == 'True':
-            return True, recipient
+    def encryption_enabled(self):
+        """Returns True if encryption is enabled through parameter or config."""
+        if self.args.encrypt and self.args.no_encrypt is False:
+            return True, self.args.encrypt[0]
+        if self._config.get('Default', 'gpg_encrypt') == 'True' and self.args.no_encrypt is False:
+            return True, str(self._config.get('Default', 'gpg_recipient'))
         return False, None
+
+    def rotation_enabled(self):
+        """Returns True if rotation is enabled..."""
+        if self.args.no_rotate is True:
+            return False
+        rotation = str(self._config.get('Default', 'autorotate'))
+        return True if rotation == 'True' else False
 
     def include_list(self):
         """Fetches all include paths from config file and returns them
@@ -102,9 +117,9 @@ class Config(object):
 
     def exclude_list(self):
         """Fetches all exclude paths from dunf_backup.ini and returns them
-        as a single string. An empty string in index 0 is added to get --exclude
-        at the front of the first path in index 1."""
-        paths = ['']
+        as a single string."""
+        paths = [''] # An empty string in index 0 is added to get --exclude
+                     # at the front of the first path in index 1
         for key, value in self._config.items('Exclude'):
             if os.path.exists(value):
                 paths.append(value)
@@ -117,8 +132,7 @@ class Backup(object):
         lists."""
         self._config = config
         self._destination = self._config.get_destination()
-        self._include_list = self._config.include_list()
-        self._exclude_list = self._config.exclude_list()
+        #self._rotation = self._config.
 
     def get_args(self):
         """Returns the status of all arguments whether they are passed to the
@@ -141,19 +155,19 @@ class Backup(object):
     def run_backup(self, destination, compress):
         """Runs the backup script..."""
         tar_option = ' -czvf' if compress else ' -cvf'
-        destination1 = '/tmp/' if self._config.crypto_is_enabled()[0] \
-                               else destination
+        destination1 = '/tmp/' if self._config.encryption_enabled() \
+            else destination
         start_time = default_timer()
         call("tar{a} {b} {c}{d} {e}".format(
-             a=self._exclude_list,
+             a=self._config.exclude_list(),
              b=tar_option,
              c=destination1,
              d=self.get_filename(),
-             e=self._include_list),
+             e=self._config.include_list()),
              shell=True)
-        if self._config.crypto_is_enabled()[0]:
+        if self._config.encryption_enabled()[0] and dependency_check() is True:
             unencrypted_file = os.path.join('/tmp/', self.get_filename())
-            self.encrypt(unencrypted_file, self._config.crypto_is_enabled()[1])
+            self.encrypt(unencrypted_file, self._config.encryption_enabled()[1])
         elapsed = default_timer() - start_time
         print("Saved to {}...".format(destination))
         print("Backup completed in {} seconds...".format(elapsed.__round__(3)))
@@ -178,6 +192,11 @@ class Backup(object):
             os.remove(os.path.join(self._destination, file))
 
 
+def dependency_check():
+    """Checks if GPG is installed."""
+    return True if os.path.exists('/usr/bin/gpg2') else False
+
+
 def main():
     """Main entry point"""
     backup = Backup()
@@ -185,8 +204,10 @@ def main():
     argument = backup.get_args()
     compress = argument.compression
     if argument.type == 'f':
+        print(argument)
         backup.run_backup(destination, compress)
-        backup.rotate()
+        if backup._config.rotation_enabled():
+            backup.rotate()
     elif argument.type == 'i':
         raise NotImplementedError
 
