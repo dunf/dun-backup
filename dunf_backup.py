@@ -161,6 +161,7 @@ class Backup(object):
     def encrypt(self, unencrypted_file, recipient):
         """Encrypts and moves file from tmpfs to disk and deletes the unencrypted
         file."""
+        print("This may take a while depending on the size of the file...")
         call('gpg2 --encrypt --recipient {a} {b}'.format(
             a=recipient,
             b=unencrypted_file),
