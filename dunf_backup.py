@@ -2,6 +2,7 @@
 
 import os
 import sys
+from shutil import move
 
 import configparser
 from argparse import ArgumentParser
@@ -33,6 +34,7 @@ def argss():
 
 class Config(object):
     args = argss()
+    encrypt = None
 
     def __init__(self, config=configparser.ConfigParser()):
         """Initializes config object and reads config file."""
@@ -61,7 +63,9 @@ class Config(object):
         p = '{}/Documents/'.format(os.environ['HOME'])
         self._config.add_section('Default')
         self._config.set('Default', 'destination', p)
-        self._config.set('Default', 'number_of_backups', '5')
+        self._config.set('Default', 'number_of_backups', '10')
+        self._config.set('Default', 'gpg_encrypt', 'False')
+        self._config.set('Default', 'gpg_recipient', 'email@dunfjeld.no')
         self._config.add_section('Include')
         self._config.add_section('Exclude')
         with open(cfg_path, 'w') as file:
@@ -76,6 +80,16 @@ class Config(object):
         flag is not set default destination is fetched from config."""
         return self.args.destination[0] if self.args.destination else \
             str(self._config.get('Default', option='destination'))
+
+    def crypto_is_enabled(self):
+        """If encryption is enabled through parameter or config, True and the
+        recipient email address used for encrypting with GPG is returned."""
+        recipient = str(self._config.get('Default', 'gpg_recipient'))
+        if self.args.encrypt is True:
+            return True, recipient
+        if self._config.get('Default', 'gpg_encrypt') == 'True':
+            return True, recipient
+        return False, None
 
     def include_list(self):
         """Fetches all include paths from config file and returns them
@@ -124,19 +138,36 @@ class Backup(object):
         else:
             return "backup_{}.tar.gz".format(timestamp)
 
-    def run_backup(self, destination, compress, encrypt):
+    def run_backup(self, destination, compress):
         """Runs the backup script..."""
         tar_option = ' -czvf' if compress else ' -cvf'
+        destination1 = '/tmp/' if self._config.crypto_is_enabled()[0] \
+                               else destination
         start_time = default_timer()
         call("tar{a} {b} {c}{d} {e}".format(
              a=self._exclude_list,
              b=tar_option,
-             c=destination,
+             c=destination1,
              d=self.get_filename(),
-             e=self._include_list), shell=True)
+             e=self._include_list),
+             shell=True)
+        if self._config.crypto_is_enabled()[0]:
+            unencrypted_file = os.path.join('/tmp/', self.get_filename())
+            self.encrypt(unencrypted_file, self._config.crypto_is_enabled()[1])
         elapsed = default_timer() - start_time
         print("Saved to {}...".format(destination))
         print("Backup completed in {} seconds...".format(elapsed.__round__(3)))
+
+    def encrypt(self, unencrypted_file, recipient):
+        """Encrypts and moves file from tmpfs to disk and deletes the unencrypted
+        file."""
+        call('gpg2 --encrypt --recipient {a} {b}'.format(
+            a=recipient,
+            b=unencrypted_file),
+            shell=True)
+        encrypted_file = unencrypted_file + '.gpg'
+        move(encrypted_file, self._destination)
+        os.remove(unencrypted_file)
 
     def rotate(self):
         """Deletes all but the x newest backups"""
@@ -152,9 +183,8 @@ def main():
     destination = backup.get_destination()
     argument = backup.get_args()
     compress = argument.compression
-    encrypt = argument.encrypt              # Not implemented
     if argument.type == 'f':
-        backup.run_backup(destination, compress, encrypt)
+        backup.run_backup(destination, compress)
         backup.rotate()
     elif argument.type == 'i':
         raise NotImplementedError
