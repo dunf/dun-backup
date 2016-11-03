@@ -2,8 +2,8 @@
 
 Simple cli-backup tool written in python.
 
-TODO: \n
+TODO:
 - Add support for incremental backups
 
-Bugs: \n
+Bugs:
 - Including several files with wild-card does not work as intended.
