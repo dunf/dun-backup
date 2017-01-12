@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python
 
 import os
 import sys
@@ -6,27 +6,24 @@ from shutil import move
 
 import configparser
 from argparse import ArgumentParser
-from subprocess import call
+from subprocess import run
 
 from time import strftime
 from timeit import default_timer
 
 __author__ = 'Mihkal Dunfjeld'
-__version__ = "1.3.0"
+__VERSION__ = "1.3.1"
 
 
 def argss():
     parser = ArgumentParser()
     parser.add_argument("-t", "--type", choices=['i', 'f'], default='f',
-                        help='Specifies backup type...'
-                             ' (i)ncremental or (f)ull backup.')
+                        help='Specifies backup type... (i)ncremental or (f)ull backup.')
     parser.add_argument("-c", "--compression",
-                        help="Whether to compress the files"
-                        "or not..", action="store_true")
+                        help="Whether to compress the files or not..", action="store_true")
     parser.add_argument("-d", "--destination", nargs=1,
                         help="Manually specify destination...")
-    parser.add_argument("-C", "--config", nargs=1, help="Specify path to config"
-                                                        "file.")
+    parser.add_argument("-C", "--config", nargs=1, help="Specify path to config file.")
     parser.add_argument('-e', '--encrypt', nargs=1,
                         help='Specify email address of GPG recipient...')
     parser.add_argument('-r', '--no_rotate', action='store_true',
@@ -35,12 +32,12 @@ def argss():
     parser.add_argument('-z', '--no_encrypt', action='store_true',
                         help='Disable encryption for current session if it\'s'
                              ' enabled in config...')
+    parser.add_argument('-v', '--version',
+                        action='version', version='%(prog)s v{}'.format(__VERSION__))
     return parser.parse_args()
 
 
 class Config(object):
-    args = argss()
-
     def __init__(self, config=configparser.ConfigParser()):
         """Initializes config object and reads config file."""
         self._config = config
@@ -49,7 +46,7 @@ class Config(object):
     def read_config(self):
         """Attempts to read the config file and creates a new one if it does not
         exist. If -C option is passed, that file is read instead."""
-        if self.args.config is None:
+        if args.config is None:
             p = os.path.join(os.environ['HOME'], '.dunf_backup.ini')
             if os.path.exists(p):
                 return self._config.read(p)
@@ -57,7 +54,7 @@ class Config(object):
                 self.create_config(p)
                 sys.exit(0)
         else:
-            file = self.args.config[0]
+            file = args.config[0]
             if os.path.isfile(file):
                 return self._config.read(file)
             sys.exit(1)
@@ -87,20 +84,20 @@ class Config(object):
     def get_destination(self):
         """Returns user specified destination directory if -d flag is set. If
         flag is not set default destination is fetched from config."""
-        return self.args.destination[0] if self.args.destination else \
+        return args.destination[0] if args.destination else \
             str(self._config.get('Default', option='destination'))
 
     def encryption_enabled(self):
         """Returns True if encryption is enabled through parameter or config."""
-        if self.args.encrypt and self.args.no_encrypt is False:
-            return True, self.args.encrypt[0]
-        if self._config.get('Default', 'gpg_encrypt') == 'True' and self.args.no_encrypt is False:
+        if args.encrypt and args.no_encrypt is False:
+            return True, args.encrypt[0]
+        if self._config.get('Default', 'gpg_encrypt') == 'True' and args.no_encrypt is False:
             return True, str(self._config.get('Default', 'gpg_recipient'))
         return False, None
 
     def rotation_enabled(self):
         """Returns True if rotation is enabled..."""
-        if self.args.no_rotate is True:
+        if args.no_rotate is True:
             return False
         rotation = str(self._config.get('Default', 'autorotate'))
         return True if rotation == 'True' else False
@@ -127,16 +124,11 @@ class Config(object):
 
 
 class Backup(object):
-    def __init__(self, config=Config()):
+    def __init__(self, config):
         """Initializes the Backup() object with destination, include/exclude
         lists."""
         self._config = config
         self._destination = self._config.get_destination()
-
-    def get_args(self):
-        """Returns the status of all arguments whether they are passed to the
-        script or not."""
-        return self._config.args
 
     def get_destination(self):
         """Returns path destination directory."""
@@ -146,7 +138,7 @@ class Backup(object):
     def get_filename():
         """Creates filename that is derived from time and type of compression."""
         timestamp = strftime("%Y_%m_%d__%H_%M")  # yyyy_mm_dd__hh_MM
-        if Config.args.compression:
+        if args.compression:
             return "backup_{}_compressed.tar.gz".format(timestamp)
         else:
             return "backup_{}.tar.gz".format(timestamp)
@@ -157,7 +149,7 @@ class Backup(object):
         destination1 = '/tmp/' if self._config.encryption_enabled() \
             else destination
         start_time = default_timer()
-        call("tar{a} {b} {c}{d} {e}".format(
+        run("tar{a} {b} {c}{d} {e}".format(
              a=self._config.exclude_list(),
              b=tar_option,
              c=destination1,
@@ -175,7 +167,7 @@ class Backup(object):
         """Encrypts and moves file from tmpfs to disk and deletes the unencrypted
         file."""
         print("This may take a while depending on the size of the file...")
-        call('gpg2 --encrypt --recipient {a} {b}'.format(
+        run('gpg2 --encrypt --recipient {a} {b}'.format(
             a=recipient,
             b=unencrypted_file),
             shell=True)
@@ -196,20 +188,21 @@ def dependency_check():
     return True if os.path.exists('/usr/bin/gpg2') else False
 
 
-def main():
+def main(params):
     """Main entry point"""
-    backup = Backup()
+    config = Config()
+    backup = Backup(config)
     destination = backup.get_destination()
-    argument = backup.get_args()
-    compress = argument.compression
-    if argument.type == 'f':
-        print(argument)
-        backup.run_backup(destination, compress)
+    if args.type == 'f':
+        print(args.type)
+        backup.run_backup(destination, args.compression)
         if backup._config.rotation_enabled():
             backup.rotate()
-    elif argument.type == 'i':
+    elif args.type == 'i':
         raise NotImplementedError
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    args = argss()
+    main(args)
+    sys.exit(0)
